@@ -1,0 +1,25 @@
+1000 | 31:38:03 | Agent:   4.7% ( -4.3%) | Market:   6.8% (  4.1%) | Wins: 32.0% | eps:  0.000
+<class 'pandas.core.frame.DataFrame'>
+Int64Index: 1000 entries, 1 to 1000
+Data columns (total 4 columns):
+ #   Column             Non-Null Count  Dtype
+---  ------             --------------  -----
+ 0   Agent              1000 non-null   float64
+ 1   Market             1000 non-null   float64
+ 2   Difference         1000 non-null   float64
+ 3   Strategy Wins (%)  901 non-null    float64
+dtypes: float64(4)
+memory usage: 39.1 KB
+<class 'pandas.core.frame.DataFrame'>
+Int64Index: 1000 entries, 1 to 1000
+Data columns (total 4 columns):
+ #   Column             Non-Null Count  Dtype
+---  ------             --------------  -----
+ 0   Agent              1000 non-null   float64
+ 1   Market             1000 non-null   float64
+ 2   Difference         1000 non-null   float64
+ 3   Strategy Wins (%)  901 non-null    float64
+dtypes: float64(4)
+memory usage: 39.1 KB
+
+Process finished with exit code 0
