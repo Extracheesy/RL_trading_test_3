@@ -58,10 +58,15 @@ from matplotlib.ticker import FuncFormatter
 import seaborn as sns
 
 import tensorflow as tf
+from tensorflow import keras
 from tensorflow.keras import Sequential
-from tensorflow.keras.layers import Dense, Dropout
+from tensorflow.keras import layers
+from tensorflow.keras.layers import Dense, Dropout, Flatten
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.regularizers import l2
+
+
+
 
 import gym
 from gym.envs.registration import register
@@ -223,22 +228,25 @@ class DDQNAgent:
         self.train = True
 
     def build_model(self, trainable=True):
-        layers = []
-        n = len(self.architecture)
-        for i, units in enumerate(self.architecture, 1):
-            layers.append(Dense(units=units,
-                                input_dim=self.state_dim if i == 1 else None,
-                                activation='relu',
-                                kernel_regularizer=l2(self.l2_reg),
-                                name=f'Dense_{i}',
-                                trainable=trainable))
-        layers.append(Dropout(.1))
-        layers.append(Dense(units=self.num_actions,
-                            trainable=trainable,
-                            name='Output'))
-        model = Sequential(layers)
-        model.compile(loss='mean_squared_error',
-                      optimizer=Adam(lr=self.learning_rate))
+
+        num_inputs = 10
+        num_actions = 3
+        num_hidden = 256
+
+        inputs = keras.layers.Input(shape=(num_inputs,))
+        common = keras.layers.Dense(num_hidden, activation="relu")(inputs)
+        action = keras.layers.Dense(num_actions, activation="softmax")(common)
+        critic = keras.layers.Dense(1)(common)
+
+        model = keras.Model(inputs=inputs, outputs=[action, critic])
+
+        model.trainable = True
+
+        model.compile(loss='mse', optimizer=Adam(lr=0.001))
+
+        model.summary()
+        print('output shape:', model.output_shape)
+
         return model
 
     def update_target(self):
@@ -248,8 +256,20 @@ class DDQNAgent:
         self.total_steps += 1
         if np.random.rand() <= self.epsilon:
             return np.random.choice(self.num_actions)
-        q = self.online_network.predict(state)
-        return np.argmax(q, axis=1).squeeze()
+
+        state_shape = state.shape
+
+        state = tf.convert_to_tensor(state)
+        state = tf.expand_dims(state, 0)
+
+        # q = self.online_network.predict(state)
+        # return np.argmax(q, axis=1).squeeze()
+        # return np.argmax(q[0], axis=1).squeeze()
+
+        action_probs, critic_value = self.online_network.predict(state)
+
+        # return np.argmax(action_probs, axis=1).squeeze()
+        return np.argmax(action_probs, axis=1)[0]
 
     def memorize_transition(self, s, a, r, s_prime, not_done):
         if not_done:
@@ -276,46 +296,48 @@ class DDQNAgent:
         minibatch = map(np.array, zip(*sample(self.experience, self.batch_size)))
         states, actions, rewards, next_states, not_done = minibatch
 
-        """
-        print("States:")
-        print(states)
-        print("Actions:")
-        print(actions)
-        print("Rewards:")
-        print(rewards)
-        print("next_states:")
-        print(next_states)
-        print("not_done:")
-        print(not_done)
-        """
-
         i = self.episode_length
         j = self.episodes
 
         #next_states[next_states == 0] = 0.01
 
+        next_states = tf.convert_to_tensor(next_states)
+        # next_states = tf.expand_dims(next_states, 0)
+
         next_q_values = self.online_network.predict_on_batch(next_states)
+
+        next_q_values = tf.convert_to_tensor(next_q_values[0])
 
         best_actions = tf.argmax(next_q_values, axis=1)
 
         next_q_values_target = self.target_network.predict_on_batch(next_states)
+
+        next_q_values_target = tf.convert_to_tensor(next_q_values_target[0])
 
         target_q_values = tf.gather_nd(next_q_values_target,
                                        tf.stack((self.idx, tf.cast(best_actions, tf.int32)), axis=1))
 
         targets = rewards + not_done * self.gamma * target_q_values
 
+        states = tf.convert_to_tensor(states)
+
         q_values = self.online_network.predict_on_batch(states)
 
-        q_values[[self.idx, actions]] = targets
+        q_values = q_values[0]
+
+        idx = np.array(self.idx)
+        targets = np.array(targets)
+
+        # CEDE Comment - Code to be fixed:
+        for i in idx:
+            q_values[i][actions[i]] = targets[i]
+
+        # q_values[[self.idx, actions]] = targets
+        # q_values[[idx, actions]] = targets
+
+        q_values = tf.convert_to_tensor(q_values)
 
         loss = self.online_network.train_on_batch(x=states, y=q_values)
-
-        # CD DEBUG
-        if np.isnan(loss):
-            print("episode: ", j, " ", i,"loss = nan")
-        else:
-            print("episode: ", j, " ", i,"loss: ",loss)
 
         self.losses.append(loss)
 
